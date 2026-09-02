@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OKUNY'D — Groupe de rock live</title>
 <meta name="description" content="OKUNY'D, groupe de rock live. Prochains concerts, setlist, membres et contact pour vos événements.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://okuny-d.vercel.app/">
+<meta property="og:title" content="OKUNY'D — Groupe de rock live">
+<meta property="og:description" content="Reprises pop rock, en français et en anglais. Basé en Normandie, dispo pour vos fêtes et événements.">
+<meta property="og:image" content="https://okuny-d.vercel.app/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="899">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OKUNY'D — Groupe de rock live">
+<meta name="twitter:image" content="https://okuny-d.vercel.app/og.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Barlow:wght@400;500;600&family=Special+Elite&display=swap" rel="stylesheet">
@@ -111,7 +121,7 @@
   .videos-note{color:var(--muted);max-width:60ch;margin-bottom:30px}
   .tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
   .track{display:flex;align-items:center;gap:16px;padding:16px 18px;background:var(--panel2);
-    border:1px solid var(--line);transition:border-color .2s}
+    border:1px solid var(--line);transition:border-color .2s;position:relative}
   .track.playing{border-color:var(--amber)}
   .track-play{flex-shrink:0;width:52px;height:52px;border-radius:50%;border:0;cursor:pointer;
     background:var(--amber);display:flex;align-items:center;justify-content:center;transition:transform .15s}
@@ -127,9 +137,11 @@
   .track-meta{display:flex;flex-direction:column;min-width:0}
   .track-title{font-family:'Oswald',sans-serif;font-weight:500;font-size:18px;letter-spacing:.01em}
   .track-artist{color:var(--muted);font-size:13px;margin-top:2px}
-  .audio-frame{position:fixed;left:-9999px;top:0;width:240px;height:135px;border:0}
-  .track-player{width:100%;aspect-ratio:16/9}
-  .track-player iframe{width:100%;height:100%;border:0}
+  .track-play,.track-meta{position:relative;z-index:1}
+  .yt-holder{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none;border:0;z-index:0}
+  .track.revealed{flex-wrap:wrap}
+  .track.revealed .yt-holder{position:static;opacity:1;pointer-events:auto;width:100%;height:auto;
+    aspect-ratio:16/9;margin-top:12px;z-index:1}
   .videos-more{display:flex;justify-content:center;margin-top:28px}
   #setlist{background:var(--black)}
   .setlist-intro{color:var(--muted);max-width:60ch;margin-bottom:34px}
@@ -223,7 +235,7 @@
     .fiche{padding:34px 20px}
     .gallery{grid-auto-rows:auto}
     .gallery .tile{height:auto}
-    .gallery .tile img{height:auto}
+    .gallery .tile img{height:auto;width:80%}
     .gallery .tile.wide{grid-column:span 1}
   }
   @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
@@ -431,51 +443,57 @@
     var open=g.classList.toggle('expanded');
     btn.textContent=open?'Voir moins':'Voir plus de photos';
   }
-  var currentTrack=null;
-  function stopTrack(t){
-    var f=t.querySelector('.audio-frame'); if(f){f.remove();}
-    var p=t.querySelector('.track-player'); if(p){p.remove();}
-    var b=t.querySelector('.track-play'); if(b){b.style.display='';}
-    var m=t.querySelector('.track-meta'); if(m){m.style.display='';}
-    t.classList.remove('playing');
+  var ytReady=false, ytQueue=[];
+  window.onYouTubeIframeAPIReady=function(){ ytReady=true; ytQueue.forEach(function(fn){fn();}); ytQueue=[]; };
+  function whenYT(fn){ ytReady ? fn() : ytQueue.push(fn); }
+  var players={}, currentId=null;
+  function pauseOthers(exceptId){
+    Object.keys(players).forEach(function(pid){
+      if(pid!==exceptId && players[pid] && players[pid].pauseVideo){ try{players[pid].pauseVideo();}catch(e){} }
+    });
+    document.querySelectorAll('.track.playing').forEach(function(tt){
+      if(tt.getAttribute('data-id')!==exceptId){ tt.classList.remove('playing'); tt.classList.remove('revealed'); }
+    });
   }
   document.querySelectorAll('.track').forEach(function(t){
+    var id=t.getAttribute('data-id');
     t.querySelector('.track-play').addEventListener('click',function(){
-      var id=t.getAttribute('data-id');
       if(location.protocol==='file:'){
-        window.open('https://www.youtube.com/watch?v='+id,'_blank','noopener');
-        return;
+        window.open('https://www.youtube.com/watch?v='+id,'_blank','noopener'); return;
       }
-      if(t.classList.contains('playing')){ stopTrack(t); currentTrack=null; return; }
-      if(currentTrack){ stopTrack(currentTrack); }
-      var isMobile = window.matchMedia('(pointer:coarse)').matches || window.innerWidth<=760;
-      if(isMobile){
-        // mobile browsers block hidden background audio -> show a visible inline player
-        var wrap=document.createElement('div'); wrap.className='track-player';
-        var vf=document.createElement('iframe');
-        vf.src='https://www.youtube.com/embed/'+id+'?autoplay=1&playsinline=1&rel=0';
-        vf.title='Lecture OKUNY\'D';
-        vf.setAttribute('allow','accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture');
-        vf.setAttribute('allowfullscreen','');
-        vf.setAttribute('playsinline','');
-        wrap.appendChild(vf);
-        t.querySelector('.track-play').style.display='none';
-        t.querySelector('.track-meta').style.display='none';
-        t.appendChild(wrap);
-        t.classList.add('playing');
-        currentTrack=t;
-        return;
+      if(t.classList.contains('playing')){
+        if(players[id]&&players[id].pauseVideo){try{players[id].pauseVideo();}catch(e){}}
+        t.classList.remove('playing'); currentId=null; return;
       }
-      var f=document.createElement('iframe');
-      f.className='audio-frame';
-      f.src='https://www.youtube.com/embed/'+id+'?autoplay=1';
-      f.title='Lecture audio OKUNY\'D';
-      f.setAttribute('allow','autoplay; encrypted-media');
-      t.appendChild(f);
-      t.classList.add('playing');
-      currentTrack=t;
+      pauseOthers(id);
+      t.classList.add('playing'); currentId=id;
+      whenYT(function(){
+        if(!players[id]){
+          var holder=document.createElement('div'); holder.className='yt-holder';
+          t.appendChild(holder);
+          players[id]=new YT.Player(holder,{
+            videoId:id,
+            playerVars:{playsinline:1,controls:1,rel:0,modestbranding:1},
+            events:{
+              'onReady':function(e){ e.target.playVideo(); },
+              'onStateChange':function(e){
+                if(e.data===1){ t.classList.add('playing'); }
+                else if(e.data===2||e.data===0){ t.classList.remove('playing'); }
+              }
+            }
+          });
+        } else { players[id].playVideo(); }
+        // mobile browsers may refuse hidden playback: if it hasn't started, reveal the player to tap
+        setTimeout(function(){
+          try{
+            var st=(players[id]&&players[id].getPlayerState)?players[id].getPlayerState():null;
+            if(t.classList.contains('playing') && st!==1 && st!==3){ t.classList.add('revealed'); }
+          }catch(e){ t.classList.add('revealed'); }
+        },2000);
+      });
     });
   });
 </script>
+<script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
