@@ -138,10 +138,9 @@
   .track-title{font-family:'Oswald',sans-serif;font-weight:500;font-size:18px;letter-spacing:.01em}
   .track-artist{color:var(--muted);font-size:13px;margin-top:2px}
   .track-play,.track-meta{position:relative;z-index:1}
-  .yt-holder{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none;border:0;z-index:0}
-  .track.revealed{flex-wrap:wrap}
-  .track.revealed .yt-holder{position:static;opacity:1;pointer-events:auto;width:100%;height:auto;
-    aspect-ratio:16/9;margin-top:12px;z-index:1}
+  .audio-frame{position:fixed;left:-9999px;top:0;width:240px;height:135px;border:0}
+  .track-player{width:100%;aspect-ratio:16/9}
+  .track-player iframe{width:100%;height:100%;border:0}
   .videos-more{display:flex;justify-content:center;margin-top:28px}
   #setlist{background:var(--black)}
   .setlist-intro{color:var(--muted);max-width:60ch;margin-bottom:34px}
@@ -234,7 +233,7 @@
     .member{width:150px}
     .fiche{padding:34px 20px}
     .gallery{grid-auto-rows:auto}
-    .gallery .tile{height:auto}
+    .gallery .tile{height:auto;border:0;background:transparent}
     .gallery .tile img{height:auto;width:80%}
     .gallery .tile.wide{grid-column:span 1}
   }
@@ -443,57 +442,44 @@
     var open=g.classList.toggle('expanded');
     btn.textContent=open?'Voir moins':'Voir plus de photos';
   }
-  var ytReady=false, ytQueue=[];
-  window.onYouTubeIframeAPIReady=function(){ ytReady=true; ytQueue.forEach(function(fn){fn();}); ytQueue=[]; };
-  function whenYT(fn){ ytReady ? fn() : ytQueue.push(fn); }
-  var players={}, currentId=null;
-  function pauseOthers(exceptId){
-    Object.keys(players).forEach(function(pid){
-      if(pid!==exceptId && players[pid] && players[pid].pauseVideo){ try{players[pid].pauseVideo();}catch(e){} }
-    });
-    document.querySelectorAll('.track.playing').forEach(function(tt){
-      if(tt.getAttribute('data-id')!==exceptId){ tt.classList.remove('playing'); tt.classList.remove('revealed'); }
-    });
+  var currentTrack=null;
+  function stopTrack(t){
+    var f=t.querySelector('.audio-frame'); if(f){f.remove();}
+    var p=t.querySelector('.track-player'); if(p){p.remove();}
+    var b=t.querySelector('.track-play'); if(b){b.style.display='';}
+    var m=t.querySelector('.track-meta'); if(m){m.style.display='';}
+    t.classList.remove('playing');
   }
   document.querySelectorAll('.track').forEach(function(t){
-    var id=t.getAttribute('data-id');
     t.querySelector('.track-play').addEventListener('click',function(){
+      var id=t.getAttribute('data-id');
       if(location.protocol==='file:'){
         window.open('https://www.youtube.com/watch?v='+id,'_blank','noopener'); return;
       }
-      if(t.classList.contains('playing')){
-        if(players[id]&&players[id].pauseVideo){try{players[id].pauseVideo();}catch(e){}}
-        t.classList.remove('playing'); currentId=null; return;
+      if(t.classList.contains('playing')){ stopTrack(t); currentTrack=null; return; }
+      if(currentTrack){ stopTrack(currentTrack); }
+      var isMobile = window.matchMedia('(pointer:coarse)').matches || window.innerWidth<=760;
+      if(isMobile){
+        var wrap=document.createElement('div'); wrap.className='track-player';
+        var vf=document.createElement('iframe');
+        vf.src='https://www.youtube.com/embed/'+id+'?autoplay=1&playsinline=1&rel=0';
+        vf.title='Lecture OKUNY\'D';
+        vf.setAttribute('allow','accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture');
+        vf.setAttribute('allowfullscreen',''); vf.setAttribute('playsinline','');
+        wrap.appendChild(vf);
+        t.querySelector('.track-play').style.display='none';
+        t.querySelector('.track-meta').style.display='none';
+        t.appendChild(wrap);
+        t.classList.add('playing'); currentTrack=t; return;
       }
-      pauseOthers(id);
-      t.classList.add('playing'); currentId=id;
-      whenYT(function(){
-        if(!players[id]){
-          var holder=document.createElement('div'); holder.className='yt-holder';
-          t.appendChild(holder);
-          players[id]=new YT.Player(holder,{
-            videoId:id,
-            playerVars:{playsinline:1,controls:1,rel:0,modestbranding:1},
-            events:{
-              'onReady':function(e){ e.target.playVideo(); },
-              'onStateChange':function(e){
-                if(e.data===1){ t.classList.add('playing'); }
-                else if(e.data===2||e.data===0){ t.classList.remove('playing'); }
-              }
-            }
-          });
-        } else { players[id].playVideo(); }
-        // mobile browsers may refuse hidden playback: if it hasn't started, reveal the player to tap
-        setTimeout(function(){
-          try{
-            var st=(players[id]&&players[id].getPlayerState)?players[id].getPlayerState():null;
-            if(t.classList.contains('playing') && st!==1 && st!==3){ t.classList.add('revealed'); }
-          }catch(e){ t.classList.add('revealed'); }
-        },2000);
-      });
+      var f=document.createElement('iframe');
+      f.className='audio-frame';
+      f.src='https://www.youtube.com/embed/'+id+'?autoplay=1';
+      f.title='Lecture audio OKUNY\'D';
+      f.setAttribute('allow','autoplay; encrypted-media');
+      t.appendChild(f); t.classList.add('playing'); currentTrack=t;
     });
   });
 </script>
-<script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
